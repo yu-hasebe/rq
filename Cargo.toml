@@ -45,6 +45,7 @@ features = [
     "HtmlImageElement",
     "Response",
     "Performance",
+    "KeyboardEvent",
 ]
 
 console_error_panic_hook = "0.1.7"

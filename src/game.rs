@@ -11,6 +11,7 @@ pub struct RQ {
     image: Option<HtmlImageElement>,
     sheet: Option<Sheet>,
     frame: u8,
+    position: engine::Point,
 }
 impl RQ {
     pub fn new() -> Self {
@@ -18,6 +19,7 @@ impl RQ {
             image: None,
             sheet: None,
             frame: 0,
+            position: engine::Point { x: 0, y: 0 },
         }
     }
 }
@@ -29,18 +31,35 @@ impl engine::Game for RQ {
         let sheet: Sheet = serde_wasm_bindgen::from_value(json)
             .map_err(|err| anyhow!("error deserializing json: {:#?}", err))?;
         let image = engine::load_image("Sprite-0001.png").await?;
-        Ok(Box::new(RQ {
+        Ok(Box::new(Self {
             image: Some(image),
             sheet: Some(sheet),
-            frame: 0,
+            frame: self.frame,
+            position: self.position,
         }))
     }
-    fn update(&mut self) {
+    fn update(&mut self, key_state: &engine::KeyState) {
         if self.frame < 23 {
             self.frame += 1;
         } else {
             self.frame = 0;
         }
+
+        let mut velocity = engine::Point { x: 0, y: 0 };
+        if key_state.is_pressed("ArrowDown") {
+            velocity.y += 3;
+        }
+        if key_state.is_pressed("ArrowUp") {
+            velocity.y -= 3;
+        }
+        if key_state.is_pressed("ArrowRight") {
+            velocity.x += 3;
+        }
+        if key_state.is_pressed("ArrowLeft") {
+            velocity.x -= 3;
+        }
+        self.position.x += velocity.x;
+        self.position.y += velocity.y;
     }
     fn draw(&self, renderer: &engine::Renderer) {
         renderer.clear(&engine::Rect {
@@ -58,24 +77,31 @@ impl engine::Game for RQ {
             _ => panic!(),
         };
         let frame_name = format!("left0{}.png", frame);
-        let sprite = self.sheet.as_ref().and_then(|sheet| sheet.frames.get(&frame_name)).unwrap();
-        self.image.as_ref().map(|image| {
-            renderer.draw_image(
-                image,
-                &engine::Rect {
-                    x: sprite.frame.x.into(),
-                    y: sprite.frame.y.into(),
-                    w: sprite.frame.w.into(),
-                    h: sprite.frame.h.into(),
-                },
-                &engine::Rect {
-                    x: 240,
-                    y: 240,
-                    w: sprite.frame.w.into(),
-                    h: sprite.frame.h.into(),
-                },
-            )
-        }).unwrap();
+        let sprite = self
+            .sheet
+            .as_ref()
+            .and_then(|sheet| sheet.frames.get(&frame_name))
+            .unwrap();
+        self.image
+            .as_ref()
+            .map(|image| {
+                renderer.draw_image(
+                    image,
+                    &engine::Rect {
+                        x: sprite.frame.x.into(),
+                        y: sprite.frame.y.into(),
+                        w: sprite.frame.w.into(),
+                        h: sprite.frame.h.into(),
+                    },
+                    &engine::Rect {
+                        x: self.position.x.into(),
+                        y: self.position.y.into(),
+                        w: sprite.frame.w.into(),
+                        h: sprite.frame.h.into(),
+                    },
+                )
+            })
+            .unwrap();
     }
 }
 
@@ -88,10 +114,10 @@ struct Sheet {
 // TODO move to engine module
 #[derive(Deserialize)]
 struct SheetRect {
-    x: u16,
-    y: u16,
-    w: u16,
-    h: u16,
+    x: i16,
+    y: i16,
+    w: i16,
+    h: i16,
 }
 
 // TODO move to engine module

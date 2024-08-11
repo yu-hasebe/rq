@@ -12,7 +12,9 @@ pub fn main_js() -> Result<(), JsValue> {
 
     browser::spawn_local(async move {
         let game = game::RQ::new();
-        engine::GameLoop::start(game).await.expect("error starting game loop");
+        engine::GameLoop::start(game)
+            .await
+            .expect("error starting game loop");
     });
 
     Ok(())
