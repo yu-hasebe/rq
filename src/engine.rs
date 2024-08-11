@@ -64,6 +64,11 @@ pub struct Rect {
     pub h: i16,
 }
 
+pub const KEY_CODE_ARROW_LEFT: &str = "ArrowLeft";
+pub const KEY_CODE_ARROW_UP: &str = "ArrowUp";
+pub const KEY_CODE_ARROW_RIGHT: &str = "ArrowRight";
+pub const KEY_CODE_ARROW_DOWN: &str = "ArrowDown";
+
 fn prepare_input() -> Result<UnboundedReceiver<KeyPress>> {
     let (keydown_sender, keyevent_receiver) = unbounded();
     let keydown_sender = Rc::new(RefCell::new(keydown_sender));
