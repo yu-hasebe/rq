@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use std::future::Future;
-use wasm_bindgen::closure::WasmClosureFnOnce;
+use wasm_bindgen::closure::{WasmClosure, WasmClosureFnOnce};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{CanvasRenderingContext2d, Document, HtmlCanvasElement, HtmlImageElement, Window};
@@ -43,6 +43,13 @@ pub fn context() -> Result<CanvasRenderingContext2d> {
         })
 }
 
+pub fn now() -> Result<f64> {
+    Ok(window()?
+        .performance()
+        .ok_or_else(|| anyhow!("no performance object"))?
+        .now())
+}
+
 pub fn spawn_local<F>(future: F)
 where
     F: Future<Output = ()> + 'static,
@@ -81,4 +88,21 @@ where
     F: 'static + WasmClosureFnOnce<A, R>,
 {
     Closure::once(fn_once)
+}
+
+pub fn closure_wrap<T>(data: Box<T>) -> Closure<T>
+where
+    T: ?Sized + WasmClosure,
+{
+    Closure::wrap(data)
+}
+
+pub type LoopClosure = Closure<dyn FnMut(f64)>;
+pub fn create_request_animation_frame_closure(f: impl FnMut(f64) + 'static) -> LoopClosure {
+    closure_wrap(Box::new(f))
+}
+pub fn request_animation_frame(callback: &LoopClosure) -> Result<i32> {
+    window()?
+        .request_animation_frame(callback.as_ref().unchecked_ref())
+        .map_err(|js_value| anyhow!("error request animation frame: {:#?}", js_value))
 }
