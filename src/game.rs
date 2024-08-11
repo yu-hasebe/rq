@@ -5,21 +5,18 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::marker::PhantomData;
 use web_sys::HtmlImageElement;
 
 pub struct RQ {
-    image: Option<HtmlImageElement>,
-    sheet: Option<Sheet>,
     frame: u8,
-    position: engine::Point,
+    actor: Actor,
 }
 impl RQ {
     pub fn new() -> Self {
         Self {
-            image: None,
-            sheet: None,
             frame: 0,
-            position: engine::Point { x: 0, y: 0 },
+            actor: Actor::new(),
         }
     }
 }
@@ -32,34 +29,18 @@ impl engine::Game for RQ {
             .map_err(|err| anyhow!("error deserializing json: {:#?}", err))?;
         let image = engine::load_image("Sprite-0001.png").await?;
         Ok(Box::new(Self {
-            image: Some(image),
-            sheet: Some(sheet),
             frame: self.frame,
-            position: self.position,
+            actor: Actor {
+                state_machine: Some(ActorStateMachine::new(ActorStateContext::new(sheet, image))),
+            },
         }))
     }
     fn update(&mut self, key_state: &engine::KeyState) {
-        if self.frame < 23 {
-            self.frame += 1;
-        } else {
-            self.frame = 0;
+        if let Some(state_machine) = self.actor.state_machine.take() {
+            self.actor
+                .state_machine
+                .replace(state_machine.update(key_state));
         }
-
-        let mut velocity = engine::Point { x: 0, y: 0 };
-        if key_state.is_pressed("ArrowDown") {
-            velocity.y += 3;
-        }
-        if key_state.is_pressed("ArrowUp") {
-            velocity.y -= 3;
-        }
-        if key_state.is_pressed("ArrowRight") {
-            velocity.x += 3;
-        }
-        if key_state.is_pressed("ArrowLeft") {
-            velocity.x -= 3;
-        }
-        self.position.x += velocity.x;
-        self.position.y += velocity.y;
     }
     fn draw(&self, renderer: &engine::Renderer) {
         renderer.clear(&engine::Rect {
@@ -68,21 +49,103 @@ impl engine::Game for RQ {
             w: 480,
             h: 480,
         });
+        if let Some(state_machine) = &self.actor.state_machine {
+            state_machine.draw(renderer);
+        }
+    }
+}
 
-        // it is assumed that 0 <= self.frame < 24
-        let frame = match self.frame / 6 {
+#[derive(Deserialize)]
+struct Sheet {
+    frames: HashMap<String, Cell>,
+}
+
+#[derive(Deserialize)]
+struct SheetRect {
+    x: i16,
+    y: i16,
+    w: i16,
+    h: i16,
+}
+
+#[derive(Deserialize)]
+struct Cell {
+    frame: SheetRect,
+}
+
+struct Actor {
+    state_machine: Option<ActorStateMachine>,
+}
+impl Actor {
+    fn new() -> Self {
+        Self {
+            state_machine: None,
+        }
+    }
+}
+enum ActorStateMachine {
+    Idle(ActorState<Idle>),
+    Moving(ActorState<Moving>),
+}
+impl ActorStateMachine {
+    fn new(context: ActorStateContext) -> Self {
+        ActorStateMachine::Idle(ActorState::<Idle>::new(context))
+    }
+    fn update(self, key_state: &engine::KeyState) -> Self {
+        match self {
+            ActorStateMachine::Idle(state) => {
+                let state = state.update(key_state);
+                match state {
+                    ActorIdleEndState::Complete(state) => ActorStateMachine::Moving(state),
+                    ActorIdleEndState::Continue(state) => ActorStateMachine::Idle(state),
+                }
+            }
+            ActorStateMachine::Moving(state) => {
+                let state = state.update();
+                match state {
+                    ActorMovingEndState::Complete(state) => ActorStateMachine::Idle(state),
+                    ActorMovingEndState::Continue(state) => ActorStateMachine::Moving(state),
+                }
+            }
+        }
+    }
+    fn draw(&self, renderer: &engine::Renderer) {
+        match self {
+            ActorStateMachine::Idle(state) => state.draw(renderer),
+            ActorStateMachine::Moving(state) => state.draw(renderer),
+        }
+    }
+}
+
+struct Idle;
+struct Moving;
+struct ActorState<S> {
+    context: ActorStateContext,
+    _state: PhantomData<S>,
+}
+impl<S> ActorState<S> {
+    fn draw(&self, renderer: &engine::Renderer) {
+        let sprite_name = match self.context.direction {
+            Direction::Up => "up",
+            Direction::Down => "down",
+            Direction::Right => "right",
+            Direction::Left => "left",
+        };
+        let frame: u8 = match self.context.frame / 6 {
             0 | 2 => 2,
             1 => 3,
             3 => 1,
             _ => panic!(),
         };
-        let frame_name = format!("left0{}.png", frame);
+        let frame_name = format!("{}0{}.png", sprite_name, frame);
         let sprite = self
+            .context
             .sheet
             .as_ref()
             .and_then(|sheet| sheet.frames.get(&frame_name))
             .unwrap();
-        self.image
+        self.context
+            .image
             .as_ref()
             .map(|image| {
                 renderer.draw_image(
@@ -94,8 +157,8 @@ impl engine::Game for RQ {
                         h: sprite.frame.h.into(),
                     },
                     &engine::Rect {
-                        x: self.position.x.into(),
-                        y: self.position.y.into(),
+                        x: self.context.position.x.into(),
+                        y: self.context.position.y.into(),
                         w: sprite.frame.w.into(),
                         h: sprite.frame.h.into(),
                     },
@@ -104,24 +167,109 @@ impl engine::Game for RQ {
             .unwrap();
     }
 }
-
-// TODO move to engine module
-#[derive(Deserialize)]
-struct Sheet {
-    frames: HashMap<String, Cell>,
+struct ActorStateContext {
+    frame: u8,
+    sheet: Option<Sheet>,
+    image: Option<HtmlImageElement>,
+    position: engine::Point,
+    direction: Direction,
 }
 
-// TODO move to engine module
-#[derive(Deserialize)]
-struct SheetRect {
-    x: i16,
-    y: i16,
-    w: i16,
-    h: i16,
+#[derive(PartialEq)]
+enum Direction {
+    Up,
+    Down,
+    Right,
+    Left,
+}
+impl ActorStateContext {
+    fn new(sheet: Sheet, image: HtmlImageElement) -> Self {
+        Self {
+            frame: 0,
+            sheet: Some(sheet),
+            image: Some(image),
+            position: engine::Point { x: 0, y: 0 },
+            direction: Direction::Down,
+        }
+    }
 }
 
-// TODO move to engine module
-#[derive(Deserialize)]
-struct Cell {
-    frame: SheetRect,
+impl ActorState<Idle> {
+    fn new(context: ActorStateContext) -> Self {
+        Self {
+            context,
+            _state: PhantomData::<Idle>,
+        }
+    }
+    fn update(mut self, key_state: &engine::KeyState) -> ActorIdleEndState {
+        log!("x: {}, y: {}", self.context.position.x, self.context.position.y);
+        if key_state.is_pressed("ArrowUp") {
+            if self.context.direction == Direction::Up {
+                self.context.position.y -= 4;
+                return ActorIdleEndState::Complete(ActorState::<Moving> {
+                    context: self.context,
+                    _state: PhantomData::<Moving>,
+                });
+            }
+            self.context.direction = Direction::Up;
+        } else if key_state.is_pressed("ArrowDown") {
+            if self.context.direction == Direction::Down {
+                self.context.position.y += 4;
+                return ActorIdleEndState::Complete(ActorState::<Moving> {
+                    context: self.context,
+                    _state: PhantomData::<Moving>,
+                });
+            }
+            self.context.direction = Direction::Down;
+        } else if key_state.is_pressed("ArrowRight") {
+            if self.context.direction == Direction::Right {
+                self.context.position.x += 4;
+                return ActorIdleEndState::Complete(ActorState::<Moving> {
+                    context: self.context,
+                    _state: PhantomData::<Moving>,
+                });
+            }
+            self.context.direction = Direction::Right;
+        } else if key_state.is_pressed("ArrowLeft") {
+            if self.context.direction == Direction::Left {
+                self.context.position.x -= 4;
+                return ActorIdleEndState::Complete(ActorState::<Moving> {
+                    context: self.context,
+                    _state: PhantomData::<Moving>,
+                });
+            }
+            self.context.direction = Direction::Left;
+        }
+        return ActorIdleEndState::Continue(self);
+    }
+}
+
+enum ActorIdleEndState {
+    Continue(ActorState<Idle>),
+    Complete(ActorState<Moving>),
+}
+
+impl ActorState<Moving> {
+    fn update(mut self) -> ActorMovingEndState {
+        log!("x: {}, y: {}", self.context.position.x, self.context.position.y);
+        match self.context.direction {
+            Direction::Up => self.context.position.y -= 4,
+            Direction::Down => self.context.position.y += 4,
+            Direction::Right => self.context.position.x += 4,
+            Direction::Left => self.context.position.x -= 4,
+        };
+        if self.context.position.x % 32 == 0 && self.context.position.y % 32 == 0 {
+            ActorMovingEndState::Complete(ActorState::<Idle> {
+                context: self.context,
+                _state: PhantomData::<Idle>,
+            })
+        } else {
+            ActorMovingEndState::Continue(self)
+        }
+    }
+}
+
+enum ActorMovingEndState {
+    Continue(ActorState<Moving>),
+    Complete(ActorState<Idle>),
 }
