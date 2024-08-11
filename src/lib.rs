@@ -1,5 +1,9 @@
+#[macro_use]
+mod browser;
+mod engine;
+
 use serde::Deserialize;
-use std::{collections::HashMap, rc::Rc, sync::Mutex};
+use std::{collections::HashMap};
 use wasm_bindgen::prelude::*;
 
 // This is like the `main` function, except for JavaScript.
@@ -7,42 +11,12 @@ use wasm_bindgen::prelude::*;
 pub fn main_js() -> Result<(), JsValue> {
     console_error_panic_hook::set_once();
 
-    let window = web_sys::window().unwrap();
-    let document = window.document().unwrap();
-    let canvas = document
-        .get_element_by_id("canvas")
-        .unwrap()
-        .dyn_into::<web_sys::HtmlCanvasElement>()
-        .unwrap();
-    let context = canvas
-        .get_context("2d")
-        .unwrap()
-        .unwrap()
-        .dyn_into::<web_sys::CanvasRenderingContext2d>()
-        .unwrap();
+    let context = browser::context().expect("no 2d context found");
 
-    wasm_bindgen_futures::spawn_local(async move {
-        let json = fetch_json("Sprite-0001.json").await.unwrap();
+    browser::spawn_local(async move {
+        let json = browser::fetch_json("Sprite-0001.json").await.expect("failed to fetch json");
         let sheet: Sheet = serde_wasm_bindgen::from_value(json).unwrap();
-
-        let (success_tx, success_rx) = futures::channel::oneshot::channel::<Result<(), JsValue>>();
-        let success_tx = Rc::new(Mutex::new(Some(success_tx)));
-        let error_tx = Rc::clone(&success_tx);
-        let callback = Closure::once(move || {
-            if let Some(success_tx) = success_tx.lock().ok().and_then(|mut opt| opt.take()) {
-                success_tx.send(Ok(())).unwrap();
-            }
-        });
-        let error_callback = Closure::once(move |err| {
-            if let Some(error_tx) = error_tx.lock().ok().and_then(|mut opt| opt.take()) {
-                error_tx.send(Err(err)).unwrap();
-            }
-        });
-        let image = web_sys::HtmlImageElement::new().unwrap();
-        image.set_onload(Some(callback.as_ref().unchecked_ref()));
-        image.set_onerror(Some(error_callback.as_ref().unchecked_ref()));
-        image.set_src("Sprite-0001.png");
-        let _ = success_rx.await.unwrap();
+        let image = engine::load_image("Sprite-0001.png").await.expect("failed to load image");
 
         let mut frame = -1;
         let interval_callback = Closure::wrap(Box::new(move || {
@@ -69,7 +43,8 @@ pub fn main_js() -> Result<(), JsValue> {
                 )
                 .unwrap();
         }) as Box<dyn FnMut()>);
-        window
+        browser::window()
+            .expect("no window found")
             .set_interval_with_callback_and_timeout_and_arguments_0(
                 interval_callback.as_ref().unchecked_ref(),
                 200,
@@ -79,14 +54,6 @@ pub fn main_js() -> Result<(), JsValue> {
     });
 
     Ok(())
-}
-
-async fn fetch_json(json_path: &str) -> Result<JsValue, JsValue> {
-    let window = web_sys::window().unwrap();
-    let resp_value = wasm_bindgen_futures::JsFuture::from(window.fetch_with_str(json_path)).await?;
-    let resp = resp_value.dyn_into::<web_sys::Response>()?;
-
-    wasm_bindgen_futures::JsFuture::from(resp.json()?).await
 }
 
 #[derive(Deserialize)]
