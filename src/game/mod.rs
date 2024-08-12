@@ -1,14 +1,10 @@
 mod actor;
 
-use crate::browser;
 use crate::engine;
-use crate::engine::Sheet;
-use crate::engine::SpriteSheet;
-
 use actor::{Actor, ActorStateContext, ActorStateMachine};
-use engine::Game;
+use engine::{Game, ImageAssetLoader, JsonAssetLoader, SpriteSheet};
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 
 pub struct RQ {
@@ -27,10 +23,10 @@ impl RQ {
 #[async_trait(?Send)]
 impl Game for RQ {
     async fn initialize(&self) -> Result<Box<dyn engine::Game>> {
-        let sheet: Sheet =
-            serde_wasm_bindgen::from_value(browser::fetch_json("Sprite-0001.json").await?)
-                .map_err(|err| anyhow!("error deserializing json: {:#?}", err))?;
-        let image = engine::load_image("Sprite-0001.png").await?;
+        let mut json_asset_loader = JsonAssetLoader::new();
+        let mut image_asset_loader = ImageAssetLoader::new();
+        let sheet = json_asset_loader.load_sheet("Sprite-0001.json").await?;
+        let image = image_asset_loader.load_image("Sprite-0001.png").await?;
         Ok(Box::new(Self {
             frame: self.frame,
             actor: Actor {

@@ -48,22 +48,60 @@ impl SpriteSheet {
     }
 }
 
+pub struct JsonAssetLoader {
+    jsons: HashMap<String, JsValue>,
+}
+impl JsonAssetLoader {
+    pub fn new() -> Self {
+        Self {
+            jsons: HashMap::new(),
+        }
+    }
+    pub async fn load_json(&mut self, source: &str) -> Result<JsValue> {
+        Ok(self
+            .jsons
+            .entry(source.to_string())
+            .or_insert(browser::fetch_json(source).await?)
+            .clone())
+    }
+    pub async fn load_sheet(&mut self, source: &str) -> Result<Sheet> {
+        serde_wasm_bindgen::from_value(self.load_json(source).await?)
+            .map_err(|err| anyhow!("error deserializing json: {:#?}", err))
+    }
+}
+
+pub struct ImageAssetLoader {
+    images: HashMap<String, HtmlImageElement>,
+}
+impl ImageAssetLoader {
+    pub fn new() -> Self {
+        Self {
+            images: HashMap::new(),
+        }
+    }
+    pub async fn load_image(&mut self, source: &str) -> Result<HtmlImageElement> {
+        Ok(self
+            .images
+            .entry(source.to_string())
+            .or_insert(load_image(source).await?)
+            .clone())
+    }
+}
+
 #[derive(Deserialize)]
 pub struct Sheet {
     frames: HashMap<String, Cell>,
 }
-
 #[derive(Deserialize)]
 struct SheetRect {
-    pub x: i16,
-    pub y: i16,
-    pub w: i16,
-    pub h: i16,
+    x: i16,
+    y: i16,
+    w: i16,
+    h: i16,
 }
-
 #[derive(Deserialize)]
 struct Cell {
-    pub frame: SheetRect,
+    frame: SheetRect,
 }
 
 pub async fn load_image(source: &str) -> Result<HtmlImageElement> {
