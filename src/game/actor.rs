@@ -1,15 +1,13 @@
 use crate::engine::{
-    KeyState, Point, Rect, Renderer, KEY_CODE_ARROW_DOWN, KEY_CODE_ARROW_LEFT,
+    KeyState, Point, Renderer, SpriteSheet, KEY_CODE_ARROW_DOWN, KEY_CODE_ARROW_LEFT,
     KEY_CODE_ARROW_RIGHT, KEY_CODE_ARROW_UP,
 };
-use crate::game::Sheet;
 
+use anyhow::Result;
 use std::marker::PhantomData;
-use web_sys::HtmlImageElement;
 
 pub struct ActorStateContext {
-    sheet: Option<Sheet>,
-    image: Option<HtmlImageElement>,
+    sprite_sheet: SpriteSheet,
     frame: u8,
     position: Point,
     direction: Direction,
@@ -21,10 +19,9 @@ enum Direction {
     Down,
 }
 impl ActorStateContext {
-    pub fn new(sheet: Sheet, image: HtmlImageElement) -> Self {
+    pub fn new(sprite_sheet: SpriteSheet) -> Self {
         Self {
-            sheet: Some(sheet),
-            image: Some(image),
+            sprite_sheet,
             frame: 0,
             position: Point { x: 0, y: 0 },
             direction: Direction::Down,
@@ -40,7 +37,7 @@ impl ActorStateContext {
     }
     fn set_direction(&mut self, direction: Direction) {
         self.direction = direction;
-    } 
+    }
     fn fit(&self) -> bool {
         self.position.x % 32 == 0 && self.position.y % 32 == 0
     }
@@ -92,7 +89,7 @@ impl ActorStateMachine {
             ActorStateMachine::Moving(state) => state.update().into(),
         }
     }
-    pub fn draw(&self, renderer: &Renderer) {
+    pub fn draw(&self, renderer: &Renderer) -> Result<()> {
         match self {
             ActorStateMachine::Idle(state) => state.draw(renderer),
             ActorStateMachine::Moving(state) => state.draw(renderer),
@@ -107,35 +104,11 @@ pub struct ActorState<S> {
     _state: PhantomData<S>,
 }
 impl<S> ActorState<S> {
-    fn draw(&self, renderer: &Renderer) {
+    fn draw(&self, renderer: &Renderer) -> Result<()> {
         let frame_name = self.context.frame_name();
-        let sprite = self
-            .context
-            .sheet
-            .as_ref()
-            .and_then(|sheet| sheet.frames.get(&frame_name))
-            .unwrap();
         self.context
-            .image
-            .as_ref()
-            .map(|image| {
-                renderer.draw_image(
-                    image,
-                    &Rect {
-                        x: sprite.frame.x.into(),
-                        y: sprite.frame.y.into(),
-                        w: sprite.frame.w.into(),
-                        h: sprite.frame.h.into(),
-                    },
-                    &Rect {
-                        x: self.context.position.x.into(),
-                        y: self.context.position.y.into(),
-                        w: sprite.frame.w.into(),
-                        h: sprite.frame.h.into(),
-                    },
-                )
-            })
-            .unwrap();
+            .sprite_sheet
+            .draw_sprite(renderer, &frame_name, &self.context.position)
     }
 }
 

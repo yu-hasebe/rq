@@ -14,7 +14,7 @@ pub fn main_js() -> Result<(), JsValue> {
         let game = game::RQ::new();
         engine::GameLoop::start(game)
             .await
-            .expect("error starting game loop");
+            .expect("error starting GameLoop");
     });
 
     Ok(())

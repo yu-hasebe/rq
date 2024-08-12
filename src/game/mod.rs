@@ -2,14 +2,14 @@ mod actor;
 
 use crate::browser;
 use crate::engine;
+use crate::engine::Sheet;
+use crate::engine::SpriteSheet;
 
-use actor::{Actor, ActorStateMachine, ActorStateContext};
+use actor::{Actor, ActorStateContext, ActorStateMachine};
 use engine::Game;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use serde::Deserialize;
-use std::collections::HashMap;
 
 pub struct RQ {
     frame: u8,
@@ -27,25 +27,31 @@ impl RQ {
 #[async_trait(?Send)]
 impl Game for RQ {
     async fn initialize(&self) -> Result<Box<dyn engine::Game>> {
-        let json = browser::fetch_json("Sprite-0001.json").await?;
-        let sheet: Sheet = serde_wasm_bindgen::from_value(json)
-            .map_err(|err| anyhow!("error deserializing json: {:#?}", err))?;
+        let sheet: Sheet =
+            serde_wasm_bindgen::from_value(browser::fetch_json("Sprite-0001.json").await?)
+                .map_err(|err| anyhow!("error deserializing json: {:#?}", err))?;
         let image = engine::load_image("Sprite-0001.png").await?;
         Ok(Box::new(Self {
             frame: self.frame,
             actor: Actor {
-                state_machine: Some(ActorStateMachine::new(ActorStateContext::new(sheet, image))),
+                state_machine: Some(ActorStateMachine::new(ActorStateContext::new(
+                    SpriteSheet {
+                        sheet: Some(sheet),
+                        image: Some(image),
+                    },
+                ))),
             },
         }))
     }
-    fn update(&mut self, key_state: &engine::KeyState) {
+    fn update(&mut self, key_state: &engine::KeyState) -> Result<()> {
         if let Some(state_machine) = self.actor.state_machine.take() {
             self.actor
                 .state_machine
                 .replace(state_machine.update(key_state));
         }
+        Ok(())
     }
-    fn draw(&self, renderer: &engine::Renderer) {
+    fn draw(&self, renderer: &engine::Renderer) -> Result<()> {
         renderer.clear(&engine::Rect {
             x: 0,
             y: 0,
@@ -53,25 +59,8 @@ impl Game for RQ {
             h: 480,
         });
         if let Some(state_machine) = &self.actor.state_machine {
-            state_machine.draw(renderer);
+            state_machine.draw(renderer)?;
         }
+        Ok(())
     }
-}
-
-#[derive(Deserialize)]
-struct Sheet {
-    frames: HashMap<String, Cell>,
-}
-
-#[derive(Deserialize)]
-struct SheetRect {
-    x: i16,
-    y: i16,
-    w: i16,
-    h: i16,
-}
-
-#[derive(Deserialize)]
-struct Cell {
-    frame: SheetRect,
 }

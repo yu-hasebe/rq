@@ -72,7 +72,7 @@ pub async fn fetch_json(json_path: &str) -> Result<JsValue> {
 }
 
 pub async fn fetch_with_str(resource: &str) -> Result<JsValue> {
-    let window = web_sys::window().unwrap();
+    let window = window()?;
     return wasm_bindgen_futures::JsFuture::from(window.fetch_with_str(resource))
         .await
         .map_err(|js_value| anyhow!("error fetching resource: {:#?}", js_value));

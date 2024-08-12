@@ -3,9 +3,68 @@ use crate::browser;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use futures::channel::mpsc::{unbounded, UnboundedReceiver};
+use serde::Deserialize;
 use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Mutex};
 use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, HtmlImageElement};
+
+pub struct SpriteSheet {
+    pub sheet: Option<Sheet>,
+    pub image: Option<HtmlImageElement>,
+}
+impl SpriteSheet {
+    pub fn draw_sprite(
+        &self,
+        renderer: &Renderer,
+        frame_name: &str,
+        destination: &Point,
+    ) -> Result<()> {
+        let cell = self
+            .sheet
+            .as_ref()
+            .and_then(|sheet| sheet.frames.get(frame_name))
+            .ok_or_else(|| anyhow!("invalid frame_name: {}", frame_name))?;
+        self.image
+            .as_ref()
+            .map(|image| {
+                renderer.draw_image(
+                    image,
+                    &Rect {
+                        x: cell.frame.x.into(),
+                        y: cell.frame.y.into(),
+                        w: cell.frame.w.into(),
+                        h: cell.frame.h.into(),
+                    },
+                    &Rect {
+                        x: destination.x.into(),
+                        y: destination.y.into(),
+                        w: cell.frame.w.into(),
+                        h: cell.frame.h.into(),
+                    },
+                )
+            })
+            .ok_or_else(|| anyhow!("error getting HtmlImageElement"))??;
+        Ok(())
+    }
+}
+
+#[derive(Deserialize)]
+pub struct Sheet {
+    frames: HashMap<String, Cell>,
+}
+
+#[derive(Deserialize)]
+struct SheetRect {
+    pub x: i16,
+    pub y: i16,
+    pub w: i16,
+    pub h: i16,
+}
+
+#[derive(Deserialize)]
+struct Cell {
+    pub frame: SheetRect,
+}
 
 pub async fn load_image(source: &str) -> Result<HtmlImageElement> {
     let (complete_tx, complete_rx) = futures::channel::oneshot::channel::<Result<()>>();
@@ -13,14 +72,16 @@ pub async fn load_image(source: &str) -> Result<HtmlImageElement> {
     let error_tx = Rc::clone(&success_tx);
     let callback = browser::closure_once(move || {
         if let Some(success_tx) = success_tx.lock().ok().and_then(|mut opt| opt.take()) {
-            success_tx.send(Ok(())).unwrap();
+            success_tx
+                .send(Ok(()))
+                .expect("error sending load image success event");
         }
     });
     let error_callback: Closure<dyn FnMut(JsValue)> = browser::closure_once(move |err| {
         if let Some(error_tx) = error_tx.lock().ok().and_then(|mut opt| opt.take()) {
             error_tx
                 .send(Err(anyhow!("error loading image: {:#?}", err)))
-                .unwrap();
+                .expect("error sending load image error event");
         }
     });
 
@@ -41,7 +102,12 @@ impl Renderer {
             .clear_rect(rect.x.into(), rect.y.into(), rect.w.into(), rect.h.into());
     }
 
-    pub fn draw_image(&self, image: &HtmlImageElement, frame: &Rect, destination: &Rect) {
+    pub fn draw_image(
+        &self,
+        image: &HtmlImageElement,
+        frame: &Rect,
+        destination: &Rect,
+    ) -> Result<()> {
         self.context
             .draw_image_with_html_image_element_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
                 image,
@@ -54,7 +120,8 @@ impl Renderer {
                 destination.w.into(),
                 destination.h.into(),
             )
-            .unwrap();
+            .map_err(|err| anyhow!("error drawing image: {:#?}", err))?;
+        Ok(())
     }
 }
 pub struct Rect {
@@ -78,13 +145,13 @@ fn prepare_input() -> Result<UnboundedReceiver<KeyPress>> {
         keydown_sender
             .borrow_mut()
             .start_send(KeyPress::KeyDown(keycode))
-            .unwrap();
+            .expect("error sending keydown event");
     }) as Box<dyn FnMut(web_sys::KeyboardEvent)>);
     let onkeyup = browser::closure_wrap(Box::new(move |keycode: web_sys::KeyboardEvent| {
         keyup_sender
             .borrow_mut()
             .start_send(KeyPress::KeyUp(keycode))
-            .unwrap();
+            .expect("error sending keyup event");
     }) as Box<dyn FnMut(web_sys::KeyboardEvent)>);
 
     browser::canvas()?.set_onkeydown(Some(onkeydown.as_ref().unchecked_ref()));
@@ -99,22 +166,18 @@ fn process_input(state: &mut KeyState, keyevent_receiver: &mut UnboundedReceiver
         match keyevent_receiver.try_next() {
             Ok(None) => break,
             Err(_err) => break,
-            Ok(Some(evt)) => {
-                match evt {
-                    KeyPress::KeyUp(evt) => state.set_released(&evt.code()),
-                    KeyPress::KeyDown(evt) => state.set_pressed(&evt.code(), evt),
-                }
-            }
+            Ok(Some(evt)) => match evt {
+                KeyPress::KeyUp(evt) => state.set_released(&evt.code()),
+                KeyPress::KeyDown(evt) => state.set_pressed(&evt.code(), evt),
+            },
         };
     }
 }
 
-#[derive(Debug)]
 enum KeyPress {
     KeyUp(web_sys::KeyboardEvent),
     KeyDown(web_sys::KeyboardEvent),
 }
-#[derive(Debug)]
 pub struct KeyState {
     pressed_keys: HashMap<String, web_sys::KeyboardEvent>,
 }
@@ -141,8 +204,8 @@ impl KeyState {
 #[async_trait(?Send)]
 pub trait Game {
     async fn initialize(&self) -> Result<Box<dyn Game>>;
-    fn update(&mut self, key_state: &KeyState);
-    fn draw(&self, renderer: &Renderer);
+    fn update(&mut self, key_state: &KeyState) -> Result<()>;
+    fn draw(&self, renderer: &Renderer) -> Result<()>;
 }
 
 const FRAME_SIZE: f32 = 1.0 / 60.0 * 1000.0;
@@ -171,15 +234,24 @@ impl GameLoop {
                 process_input(&mut key_state, &mut keyevent_receiver);
                 game_loop.accumulated_delta += (perf - game_loop.last_frame) as f32;
                 while game_loop.accumulated_delta > FRAME_SIZE {
-                    game.update(&key_state);
+                    game.update(&key_state).expect("error GameLoop update");
                     game_loop.accumulated_delta -= FRAME_SIZE;
                 }
                 game_loop.last_frame = perf;
-                game.draw(&renderer);
-                browser::request_animation_frame(f.borrow().as_ref().unwrap()).unwrap();
+                game.draw(&renderer).expect("error GameLoop draw");
+                browser::request_animation_frame(
+                    f.borrow()
+                        .as_ref()
+                        .expect("error borrowing f ShareLoopClosure"),
+                )
+                .expect("error request animation frame");
             },
         ));
-        browser::request_animation_frame(g.borrow().as_ref().unwrap()).unwrap();
+        browser::request_animation_frame(
+            g.borrow()
+                .as_ref()
+                .expect("error borrowing g ShareLoopClosure"),
+        )?;
         Ok(())
     }
 }
