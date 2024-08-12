@@ -3,10 +3,11 @@ use crate::browser;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use futures::channel::mpsc::{unbounded, UnboundedReceiver};
+use futures::channel::oneshot::channel;
 use serde::Deserialize;
 use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Mutex};
 use wasm_bindgen::prelude::*;
-use web_sys::{CanvasRenderingContext2d, HtmlImageElement};
+use web_sys::{CanvasRenderingContext2d, HtmlImageElement, KeyboardEvent};
 
 pub struct SpriteSheet {
     pub sheet: Option<Sheet>,
@@ -105,7 +106,7 @@ struct Cell {
 }
 
 pub async fn load_image(source: &str) -> Result<HtmlImageElement> {
-    let (complete_tx, complete_rx) = futures::channel::oneshot::channel::<Result<()>>();
+    let (complete_tx, complete_rx) = channel::<Result<()>>();
     let success_tx = Rc::new(Mutex::new(Some(complete_tx)));
     let error_tx = Rc::clone(&success_tx);
     let callback = browser::closure_once(move || {
@@ -217,7 +218,7 @@ enum KeyPress {
     KeyDown(web_sys::KeyboardEvent),
 }
 pub struct KeyState {
-    pressed_keys: HashMap<String, web_sys::KeyboardEvent>,
+    pressed_keys: HashMap<String, KeyboardEvent>,
 }
 impl KeyState {
     fn new() -> Self {
@@ -234,7 +235,7 @@ impl KeyState {
         self.pressed_keys.remove(code.into());
     }
 
-    fn set_pressed(&mut self, code: &str, event: web_sys::KeyboardEvent) {
+    fn set_pressed(&mut self, code: &str, event: KeyboardEvent) {
         self.pressed_keys.insert(code.into(), event);
     }
 }

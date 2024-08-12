@@ -3,7 +3,10 @@ use std::future::Future;
 use wasm_bindgen::closure::{WasmClosure, WasmClosureFnOnce};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::{JsCast, JsValue};
-use web_sys::{CanvasRenderingContext2d, Document, HtmlCanvasElement, HtmlImageElement, Window};
+use wasm_bindgen_futures::JsFuture;
+use web_sys::{
+    CanvasRenderingContext2d, Document, HtmlCanvasElement, HtmlImageElement, Response, Window,
+};
 
 macro_rules! log {
     ( $( $t:tt )* ) => {
@@ -25,7 +28,7 @@ pub fn canvas() -> Result<HtmlCanvasElement> {
     document()?
         .get_element_by_id("canvas")
         .ok_or_else(|| anyhow!("no element with id canvas found"))?
-        .dyn_into::<web_sys::HtmlCanvasElement>()
+        .dyn_into::<HtmlCanvasElement>()
         .map_err(|err| anyhow!("element with id canvas not HtmlCanvasElement: {:#?}", err))
 }
 
@@ -34,7 +37,7 @@ pub fn context() -> Result<CanvasRenderingContext2d> {
         .get_context("2d")
         .map_err(|js_value| anyhow!("error getting 2d context: {:#?}", js_value))?
         .ok_or_else(|| anyhow!("no 2d context found"))?
-        .dyn_into::<web_sys::CanvasRenderingContext2d>()
+        .dyn_into::<CanvasRenderingContext2d>()
         .map_err(|object| {
             anyhow!(
                 "error converting {:#?} into CanvasRenderingContext2d",
@@ -60,10 +63,10 @@ where
 pub async fn fetch_json(json_path: &str) -> Result<JsValue> {
     let resp_value = fetch_with_str(json_path).await?;
     let resp = resp_value
-        .dyn_into::<web_sys::Response>()
+        .dyn_into::<Response>()
         .map_err(|js_value| anyhow!("error converting into Response: {:#?}", js_value))?;
 
-    wasm_bindgen_futures::JsFuture::from(
+    JsFuture::from(
         resp.json()
             .map_err(|js_value| anyhow!("error converting into json: {:#?}", js_value))?,
     )
@@ -73,13 +76,13 @@ pub async fn fetch_json(json_path: &str) -> Result<JsValue> {
 
 pub async fn fetch_with_str(resource: &str) -> Result<JsValue> {
     let window = window()?;
-    return wasm_bindgen_futures::JsFuture::from(window.fetch_with_str(resource))
+    return JsFuture::from(window.fetch_with_str(resource))
         .await
         .map_err(|js_value| anyhow!("error fetching resource: {:#?}", js_value));
 }
 
 pub fn new_image() -> Result<HtmlImageElement> {
-    web_sys::HtmlImageElement::new()
+    HtmlImageElement::new()
         .map_err(|js_value| anyhow!("error creating new HtmlImageElement: {:#?}", js_value))
 }
 

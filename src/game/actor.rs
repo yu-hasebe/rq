@@ -1,9 +1,10 @@
+use super::{TILE_HEIGHT, TILE_WIDTH};
 use crate::engine::{
     KeyState, Point, Renderer, SpriteSheet, KEY_CODE_ARROW_DOWN, KEY_CODE_ARROW_LEFT,
     KEY_CODE_ARROW_RIGHT, KEY_CODE_ARROW_UP,
 };
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::marker::PhantomData;
 
 pub struct ActorStateContext {
@@ -27,6 +28,11 @@ impl ActorStateContext {
             direction: Direction::Down,
         }
     }
+    fn draw(&self, renderer: &Renderer) -> Result<()> {
+        let frame_name = self.frame_name()?;
+        self.sprite_sheet
+            .draw_sprite(renderer, &frame_name, &self.position)
+    }
     fn move_(&mut self) {
         match self.direction {
             Direction::Left => self.position.x -= 4,
@@ -39,7 +45,7 @@ impl ActorStateContext {
         self.direction = direction;
     }
     fn fit(&self) -> bool {
-        self.position.x % 32 == 0 && self.position.y % 32 == 0
+        self.position.x % TILE_WIDTH == 0 && self.position.y % TILE_HEIGHT == 0
     }
     fn reset_frame(&mut self) {
         self.frame = 0;
@@ -47,7 +53,7 @@ impl ActorStateContext {
     fn increment_frame(&mut self) {
         self.frame = (self.frame + 1) % 16;
     }
-    fn frame_name(&self) -> String {
+    fn frame_name(&self) -> Result<String> {
         let frame_name = match self.direction {
             Direction::Left => "left",
             Direction::Up => "up",
@@ -58,9 +64,9 @@ impl ActorStateContext {
             0 | 2 => 2,
             1 => 3,
             3 => 1,
-            _ => panic!(),
+            _ => return Err(anyhow!("invalid frame logic")),
         };
-        format!("{}0{}.png", frame_name, frame)
+        Ok(format!("{}0{}.png", frame_name, frame))
     }
 }
 
@@ -105,10 +111,7 @@ pub struct ActorState<S> {
 }
 impl<S> ActorState<S> {
     fn draw(&self, renderer: &Renderer) -> Result<()> {
-        let frame_name = self.context.frame_name();
-        self.context
-            .sprite_sheet
-            .draw_sprite(renderer, &frame_name, &self.context.position)
+        self.context.draw(renderer)
     }
 }
 
