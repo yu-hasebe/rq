@@ -1,7 +1,8 @@
 mod player;
 
+use crate::browser;
 use crate::engine::{
-    Game, ImageAssetLoader, JsonAssetLoader, KeyState, Rect, Renderer, SpriteSheet
+    Game, ImageAssetLoader, JsonAssetLoader, KeyState, Rect, Renderer, Sheet, SpriteSheet,
 };
 use player::{Player, PlayerStateContext, PlayerStateMachine};
 
@@ -31,7 +32,8 @@ impl Game for RQ {
     async fn initialize(&self) -> Result<Box<dyn Game>> {
         let mut json_asset_loader = JsonAssetLoader::new();
         let mut image_asset_loader = ImageAssetLoader::new();
-        let sheet = json_asset_loader.load_sheet("Sprite-0001.json").await?;
+        let json = json_asset_loader.load_json("Sprite-0001.json").await?;
+        let sheet: Sheet = browser::from_value(json)?;
         let image = image_asset_loader.load_image("Sprite-0001.png").await?;
         let actor_state_context = PlayerStateContext::new(SpriteSheet {
             sheet: Some(sheet),

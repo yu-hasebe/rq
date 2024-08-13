@@ -1,6 +1,7 @@
 mod asset_loader;
 mod input;
 mod renderer;
+mod sprite_sheet;
 
 use crate::browser;
 
@@ -8,11 +9,12 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::{cell::RefCell, rc::Rc};
 
-pub use asset_loader::{ImageAssetLoader, JsonAssetLoader, SpriteSheet};
+pub use asset_loader::{ImageAssetLoader, JsonAssetLoader};
 pub use input::{
     KeyState, KEY_CODE_ARROW_DOWN, KEY_CODE_ARROW_LEFT, KEY_CODE_ARROW_RIGHT, KEY_CODE_ARROW_UP,
 };
 pub use renderer::Renderer;
+pub use sprite_sheet::{Sheet, SpriteSheet};
 
 #[async_trait(?Send)]
 pub trait Game {

@@ -86,6 +86,14 @@ pub fn new_image() -> Result<HtmlImageElement> {
         .map_err(|js_value| anyhow!("error creating new HtmlImageElement: {:#?}", js_value))
 }
 
+pub fn from_value<T>(value: JsValue) -> Result<T>
+where
+    T: serde::de::DeserializeOwned,
+{
+    serde_wasm_bindgen::from_value(value)
+        .map_err(|err| anyhow!("error converting json into: {:#?}", err))
+}
+
 pub fn closure_once<F, A, R>(fn_once: F) -> Closure<F::FnMut>
 where
     F: 'static + WasmClosureFnOnce<A, R>,

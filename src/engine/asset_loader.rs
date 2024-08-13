@@ -2,30 +2,9 @@ use crate::browser;
 
 use anyhow::{anyhow, Result};
 use futures::channel::oneshot::channel;
-use serde::Deserialize;
 use std::{collections::HashMap, rc::Rc, sync::Mutex};
 use wasm_bindgen::prelude::*;
 use web_sys::HtmlImageElement;
-
-pub struct SpriteSheet {
-    pub sheet: Option<Sheet>,
-    pub image: Option<HtmlImageElement>,
-}
-#[derive(Deserialize)]
-pub struct Sheet {
-    pub frames: HashMap<String, Cell>,
-}
-#[derive(Deserialize)]
-pub struct SheetRect {
-    pub x: i16,
-    pub y: i16,
-    pub w: i16,
-    pub h: i16,
-}
-#[derive(Deserialize)]
-pub struct Cell {
-    pub frame: SheetRect,
-}
 
 pub struct JsonAssetLoader {
     jsons: HashMap<String, JsValue>,
@@ -42,10 +21,6 @@ impl JsonAssetLoader {
             .entry(source.to_string())
             .or_insert(browser::fetch_json(source).await?)
             .clone())
-    }
-    pub async fn load_sheet(&mut self, source: &str) -> Result<Sheet> {
-        serde_wasm_bindgen::from_value(self.load_json(source).await?)
-            .map_err(|err| anyhow!("error deserializing json: {:#?}", err))
     }
 }
 
