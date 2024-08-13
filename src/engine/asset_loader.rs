@@ -1,4 +1,3 @@
-use super::{Point, Rect};
 use crate::browser;
 
 use anyhow::{anyhow, Result};
@@ -12,41 +11,20 @@ pub struct SpriteSheet {
     pub sheet: Option<Sheet>,
     pub image: Option<HtmlImageElement>,
 }
-// TODO refactor
-impl SpriteSheet {
-    pub fn draw_sprite(
-        &self,
-        renderer: &super::Renderer,
-        frame_name: &str,
-        destination: &Point,
-    ) -> Result<()> {
-        let cell = self
-            .sheet
-            .as_ref()
-            .and_then(|sheet| sheet.frames.get(frame_name))
-            .ok_or_else(|| anyhow!("invalid frame_name: {}", frame_name))?;
-        self.image
-            .as_ref()
-            .map(|image| {
-                renderer.draw_image(
-                    image,
-                    &Rect {
-                        x: cell.frame.x.into(),
-                        y: cell.frame.y.into(),
-                        w: cell.frame.w.into(),
-                        h: cell.frame.h.into(),
-                    },
-                    &Rect {
-                        x: destination.x.into(),
-                        y: destination.y.into(),
-                        w: cell.frame.w.into(),
-                        h: cell.frame.h.into(),
-                    },
-                )
-            })
-            .ok_or_else(|| anyhow!("error getting HtmlImageElement"))??;
-        Ok(())
-    }
+#[derive(Deserialize)]
+pub struct Sheet {
+    pub frames: HashMap<String, Cell>,
+}
+#[derive(Deserialize)]
+pub struct SheetRect {
+    pub x: i16,
+    pub y: i16,
+    pub w: i16,
+    pub h: i16,
+}
+#[derive(Deserialize)]
+pub struct Cell {
+    pub frame: SheetRect,
 }
 
 pub struct JsonAssetLoader {
@@ -87,22 +65,6 @@ impl ImageAssetLoader {
             .or_insert(load_image(source).await?)
             .clone())
     }
-}
-
-#[derive(Deserialize)]
-pub struct Sheet {
-    frames: HashMap<String, Cell>,
-}
-#[derive(Deserialize)]
-struct SheetRect {
-    x: i16,
-    y: i16,
-    w: i16,
-    h: i16,
-}
-#[derive(Deserialize)]
-struct Cell {
-    frame: SheetRect,
 }
 
 async fn load_image(source: &str) -> Result<HtmlImageElement> {

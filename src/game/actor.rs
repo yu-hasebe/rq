@@ -30,8 +30,7 @@ impl ActorStateContext {
     }
     fn draw(&self, renderer: &Renderer) -> Result<()> {
         let frame_name = self.frame_name()?;
-        self.sprite_sheet
-            .draw_sprite(renderer, &frame_name, &self.position)
+        renderer.draw_image(&self.sprite_sheet, &frame_name, &self.position)
     }
     fn move_(&mut self) {
         match self.direction {
