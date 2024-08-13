@@ -1,9 +1,9 @@
-mod actor;
+mod player;
 
 use crate::engine::{
     Game, ImageAssetLoader, JsonAssetLoader, KeyState, Rect, Renderer, SpriteSheet
 };
-use actor::{Actor, ActorStateContext, ActorStateMachine};
+use player::{Player, PlayerStateContext, PlayerStateMachine};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -15,13 +15,13 @@ const TILE_HEIGHT: i16 = 32;
 
 pub struct RQ {
     frame: u8,
-    actor: Actor,
+    actor: Player,
 }
 impl RQ {
     pub fn new() -> Self {
         Self {
             frame: 0,
-            actor: Actor::new(),
+            actor: Player::new(),
         }
     }
 }
@@ -33,14 +33,14 @@ impl Game for RQ {
         let mut image_asset_loader = ImageAssetLoader::new();
         let sheet = json_asset_loader.load_sheet("Sprite-0001.json").await?;
         let image = image_asset_loader.load_image("Sprite-0001.png").await?;
-        let actor_state_context = ActorStateContext::new(SpriteSheet {
+        let actor_state_context = PlayerStateContext::new(SpriteSheet {
             sheet: Some(sheet),
             image: Some(image),
         });
         Ok(Box::new(Self {
             frame: self.frame,
-            actor: Actor {
-                state_machine: Some(ActorStateMachine::new(actor_state_context)),
+            actor: Player {
+                state_machine: Some(PlayerStateMachine::new(actor_state_context)),
             },
         }))
     }

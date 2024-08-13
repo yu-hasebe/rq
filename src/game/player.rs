@@ -7,7 +7,7 @@ use crate::engine::{
 use anyhow::{anyhow, Result};
 use std::marker::PhantomData;
 
-pub struct ActorStateContext {
+pub struct PlayerStateContext {
     sprite_sheet: SpriteSheet,
     frame: u8,
     position: Point,
@@ -19,7 +19,7 @@ enum Direction {
     Right,
     Down,
 }
-impl ActorStateContext {
+impl PlayerStateContext {
     pub fn new(sprite_sheet: SpriteSheet) -> Self {
         Self {
             sprite_sheet,
@@ -69,10 +69,10 @@ impl ActorStateContext {
     }
 }
 
-pub struct Actor {
-    pub state_machine: Option<ActorStateMachine>,
+pub struct Player {
+    pub state_machine: Option<PlayerStateMachine>,
 }
-impl Actor {
+impl Player {
     pub fn new() -> Self {
         Self {
             state_machine: None,
@@ -80,48 +80,48 @@ impl Actor {
     }
 }
 
-pub enum ActorStateMachine {
-    Idle(ActorState<Idle>),
-    Moving(ActorState<Moving>),
+pub enum PlayerStateMachine {
+    Idle(PlayerState<Idle>),
+    Moving(PlayerState<Moving>),
 }
-impl ActorStateMachine {
-    pub fn new(context: ActorStateContext) -> Self {
-        ActorStateMachine::Idle(ActorState::<Idle>::new(context))
+impl PlayerStateMachine {
+    pub fn new(context: PlayerStateContext) -> Self {
+        PlayerStateMachine::Idle(PlayerState::<Idle>::new(context))
     }
     pub fn update(self, key_state: &KeyState) -> Self {
         match self {
-            ActorStateMachine::Idle(state) => state.update(key_state).into(),
-            ActorStateMachine::Moving(state) => state.update().into(),
+            PlayerStateMachine::Idle(state) => state.update(key_state).into(),
+            PlayerStateMachine::Moving(state) => state.update().into(),
         }
     }
     pub fn draw(&self, renderer: &Renderer) -> Result<()> {
         match self {
-            ActorStateMachine::Idle(state) => state.draw(renderer),
-            ActorStateMachine::Moving(state) => state.draw(renderer),
+            PlayerStateMachine::Idle(state) => state.draw(renderer),
+            PlayerStateMachine::Moving(state) => state.draw(renderer),
         }
     }
 }
 
 pub struct Idle;
 pub struct Moving;
-pub struct ActorState<S> {
-    context: ActorStateContext,
+pub struct PlayerState<S> {
+    context: PlayerStateContext,
     _state: PhantomData<S>,
 }
-impl<S> ActorState<S> {
+impl<S> PlayerState<S> {
     fn draw(&self, renderer: &Renderer) -> Result<()> {
         self.context.draw(renderer)
     }
 }
 
-impl ActorState<Idle> {
-    fn new(context: ActorStateContext) -> Self {
+impl PlayerState<Idle> {
+    fn new(context: PlayerStateContext) -> Self {
         Self {
             context,
             _state: PhantomData::<Idle>,
         }
     }
-    fn update(mut self, key_state: &KeyState) -> ActorIdleEndState {
+    fn update(mut self, key_state: &KeyState) -> PlayerIdleEndState {
         self.context.reset_frame();
         match self.context.direction {
             Direction::Left => {
@@ -147,7 +147,7 @@ impl ActorState<Idle> {
         }
         if !self.context.fit() {
             self.context.increment_frame();
-            return ActorIdleEndState::Complete(ActorState::<Moving> {
+            return PlayerIdleEndState::Complete(PlayerState::<Moving> {
                 context: self.context,
                 _state: PhantomData::<Moving>,
             });
@@ -162,47 +162,47 @@ impl ActorState<Idle> {
         } else if key_state.is_pressed(KEY_CODE_ARROW_DOWN) {
             self.context.set_direction(Direction::Down);
         }
-        ActorIdleEndState::Continue(self)
+        PlayerIdleEndState::Continue(self)
     }
 }
 
-enum ActorIdleEndState {
-    Continue(ActorState<Idle>),
-    Complete(ActorState<Moving>),
+enum PlayerIdleEndState {
+    Continue(PlayerState<Idle>),
+    Complete(PlayerState<Moving>),
 }
 
-impl ActorState<Moving> {
-    fn update(mut self) -> ActorMovingEndState {
+impl PlayerState<Moving> {
+    fn update(mut self) -> PlayerMovingEndState {
         self.context.increment_frame();
         self.context.move_();
         if self.context.fit() {
-            return ActorMovingEndState::Complete(ActorState::<Idle> {
+            return PlayerMovingEndState::Complete(PlayerState::<Idle> {
                 context: self.context,
                 _state: PhantomData::<Idle>,
             });
         }
-        ActorMovingEndState::Continue(self)
+        PlayerMovingEndState::Continue(self)
     }
 }
 
-enum ActorMovingEndState {
-    Continue(ActorState<Moving>),
-    Complete(ActorState<Idle>),
+enum PlayerMovingEndState {
+    Continue(PlayerState<Moving>),
+    Complete(PlayerState<Idle>),
 }
 
-impl From<ActorIdleEndState> for ActorStateMachine {
-    fn from(state: ActorIdleEndState) -> Self {
+impl From<PlayerIdleEndState> for PlayerStateMachine {
+    fn from(state: PlayerIdleEndState) -> Self {
         match state {
-            ActorIdleEndState::Complete(state) => ActorStateMachine::Moving(state),
-            ActorIdleEndState::Continue(state) => ActorStateMachine::Idle(state),
+            PlayerIdleEndState::Complete(state) => PlayerStateMachine::Moving(state),
+            PlayerIdleEndState::Continue(state) => PlayerStateMachine::Idle(state),
         }
     }
 }
-impl From<ActorMovingEndState> for ActorStateMachine {
-    fn from(state: ActorMovingEndState) -> Self {
+impl From<PlayerMovingEndState> for PlayerStateMachine {
+    fn from(state: PlayerMovingEndState) -> Self {
         match state {
-            ActorMovingEndState::Complete(state) => ActorStateMachine::Idle(state),
-            ActorMovingEndState::Continue(state) => ActorStateMachine::Moving(state),
+            PlayerMovingEndState::Complete(state) => PlayerStateMachine::Idle(state),
+            PlayerMovingEndState::Continue(state) => PlayerStateMachine::Moving(state),
         }
     }
 }
