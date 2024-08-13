@@ -1,7 +1,7 @@
 mod actor;
 
 use crate::engine::{
-    Game, ImageAssetLoader, JsonAssetLoader, KeyState, Rect, Renderer, SpriteSheet,
+    Game, ImageAssetLoader, JsonAssetLoader, KeyState, Rect, Renderer, SpriteSheet
 };
 use actor::{Actor, ActorStateContext, ActorStateMachine};
 
