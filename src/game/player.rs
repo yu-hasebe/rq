@@ -1,18 +1,22 @@
 use super::{TILE_HEIGHT, TILE_WIDTH};
 use crate::engine::{
-    KeyState, Point, Renderer, SpriteSheet, KEY_CODE_ARROW_DOWN, KEY_CODE_ARROW_LEFT,
+    KeyState, Point, Renderer, SpriteSheetStore, KEY_CODE_ARROW_DOWN, KEY_CODE_ARROW_LEFT,
     KEY_CODE_ARROW_RIGHT, KEY_CODE_ARROW_UP,
 };
 
 use anyhow::{anyhow, Result};
+use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
+#[derive(Deserialize, Serialize)]
 pub struct PlayerStateContext {
-    sprite_sheet: SpriteSheet,
-    frame: u8,
+    sprite_source: String,
     position: Point,
     direction: Direction,
+    #[serde(skip)]
+    frame: u8,
 }
+#[derive(Deserialize, Serialize)]
 enum Direction {
     Left,
     Up,
@@ -20,17 +24,13 @@ enum Direction {
     Down,
 }
 impl PlayerStateContext {
-    pub fn new(sprite_sheet: SpriteSheet) -> Self {
+    pub fn new(sprite_source: &str) -> Self {
         Self {
-            sprite_sheet,
+            sprite_source: sprite_source.to_string(),
             frame: 0,
             position: Point { x: 0, y: 0 },
             direction: Direction::Down,
         }
-    }
-    fn draw(&self, renderer: &Renderer) -> Result<()> {
-        let frame_name = self.frame_name()?;
-        renderer.draw_image(&self.sprite_sheet, &frame_name, &self.position)
     }
     fn move_(&mut self) {
         match self.direction {
@@ -40,7 +40,7 @@ impl PlayerStateContext {
             Direction::Right => self.position.x += 4,
         }
     }
-    fn set_direction(&mut self, direction: Direction) {
+    fn change_direction(&mut self, direction: Direction) {
         self.direction = direction;
     }
     fn fit(&self) -> bool {
@@ -94,23 +94,27 @@ impl PlayerStateMachine {
             PlayerStateMachine::Moving(state) => state.update().into(),
         }
     }
-    pub fn draw(&self, renderer: &Renderer) -> Result<()> {
+    pub fn draw(&self, renderer: &Renderer, sprite_sheet_store: &SpriteSheetStore) -> Result<()> {
         match self {
-            PlayerStateMachine::Idle(state) => state.draw(renderer),
-            PlayerStateMachine::Moving(state) => state.draw(renderer),
+            PlayerStateMachine::Idle(state) => state.draw(renderer, sprite_sheet_store),
+            PlayerStateMachine::Moving(state) => state.draw(renderer, sprite_sheet_store),
         }
     }
 }
 
 pub struct Idle;
 pub struct Moving;
+#[derive(Deserialize, Serialize)]
 pub struct PlayerState<S> {
+    #[serde(flatten)]
     context: PlayerStateContext,
-    _state: PhantomData<S>,
+    state: PhantomData<S>,
 }
 impl<S> PlayerState<S> {
-    fn draw(&self, renderer: &Renderer) -> Result<()> {
-        self.context.draw(renderer)
+    fn draw(&self, renderer: &Renderer, sprite_sheet_store: &SpriteSheetStore) -> Result<()> {
+        let frame_name = self.context.frame_name()?;
+        let sprite_sheet = sprite_sheet_store.get(&self.context.sprite_source)?;
+        renderer.draw_image(sprite_sheet, &frame_name, &self.context.position)
     }
 }
 
@@ -118,7 +122,7 @@ impl PlayerState<Idle> {
     fn new(context: PlayerStateContext) -> Self {
         Self {
             context,
-            _state: PhantomData::<Idle>,
+            state: PhantomData::<Idle>,
         }
     }
     fn update(mut self, key_state: &KeyState) -> PlayerIdleEndState {
@@ -149,18 +153,18 @@ impl PlayerState<Idle> {
             self.context.increment_frame();
             return PlayerIdleEndState::Complete(PlayerState::<Moving> {
                 context: self.context,
-                _state: PhantomData::<Moving>,
+                state: PhantomData::<Moving>,
             });
         }
 
         if key_state.is_pressed(KEY_CODE_ARROW_LEFT) {
-            self.context.set_direction(Direction::Left)
+            self.context.change_direction(Direction::Left)
         } else if key_state.is_pressed(KEY_CODE_ARROW_UP) {
-            self.context.set_direction(Direction::Up);
+            self.context.change_direction(Direction::Up);
         } else if key_state.is_pressed(KEY_CODE_ARROW_RIGHT) {
-            self.context.set_direction(Direction::Right);
+            self.context.change_direction(Direction::Right);
         } else if key_state.is_pressed(KEY_CODE_ARROW_DOWN) {
-            self.context.set_direction(Direction::Down);
+            self.context.change_direction(Direction::Down);
         }
         PlayerIdleEndState::Continue(self)
     }
@@ -178,7 +182,7 @@ impl PlayerState<Moving> {
         if self.context.fit() {
             return PlayerMovingEndState::Complete(PlayerState::<Idle> {
                 context: self.context,
-                _state: PhantomData::<Idle>,
+                state: PhantomData::<Idle>,
             });
         }
         PlayerMovingEndState::Continue(self)
