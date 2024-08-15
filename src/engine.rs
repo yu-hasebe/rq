@@ -7,6 +7,7 @@ use crate::browser;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, rc::Rc};
 
 pub use asset_loader::{ImageAssetLoader, JsonAssetLoader};
@@ -78,8 +79,17 @@ pub struct Rect {
     pub h: i16,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Deserialize, Serialize)]
 pub struct Point {
     pub x: i16,
     pub y: i16,
+}
+
+pub trait GameObject<'a>
+where
+    Self: Sized + Deserialize<'a> + Serialize,
+{
+    fn update(&mut self, key_state: &KeyState) -> Result<()>;
+
+    fn draw(&self, renderer: &Renderer) -> Result<()>;
 }
