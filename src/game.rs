@@ -2,12 +2,12 @@ mod player;
 
 use crate::browser;
 use crate::engine::{
-    Game, GameObject as _, ImageAssetLoader, JsonAssetLoader, KeyState, Rect, Renderer, Sheet, SpriteSheet
+    Game, ImageAssetLoader, JsonAssetLoader, KeyState, Rect, Renderer, Sheet, SpriteSheet,
 };
+use player::{Player, PlayerStateContext, PlayerStateMachine};
 
 use anyhow::Result;
 use async_trait::async_trait;
-use player::Player;
 
 const CANVAS_WIDTH: i16 = 480;
 const CANVAS_HEIGHT: i16 = 480;
@@ -16,13 +16,13 @@ const TILE_HEIGHT: i16 = 32;
 
 pub struct RQ {
     frame: u8,
-    player: Player,
+    actor: Player,
 }
 impl RQ {
     pub fn new() -> Self {
         Self {
             frame: 0,
-            player: Player::new("Sprite-0001", None),
+            actor: Player::new(),
         }
     }
 }
@@ -35,19 +35,24 @@ impl Game for RQ {
         let json = json_asset_loader.load_json("Sprite-0001.json").await?;
         let sheet: Sheet = browser::from_value(json)?;
         let image = image_asset_loader.load_image("Sprite-0001.png").await?;
+        let actor_state_context = PlayerStateContext::new(SpriteSheet {
+            sheet: Some(sheet),
+            image: Some(image),
+        });
         Ok(Box::new(Self {
             frame: self.frame,
-            player: Player::new(
-                "Sprite-0001",
-                Some(SpriteSheet {
-                    sheet: Some(sheet),
-                    image: Some(image),
-                }),
-            ),
+            actor: Player {
+                state_machine: Some(PlayerStateMachine::new(actor_state_context)),
+            },
         }))
     }
     fn update(&mut self, key_state: &KeyState) -> Result<()> {
-        self.player.update(key_state)
+        if let Some(state_machine) = self.actor.state_machine.take() {
+            self.actor
+                .state_machine
+                .replace(state_machine.update(key_state));
+        }
+        Ok(())
     }
     fn draw(&self, renderer: &Renderer) -> Result<()> {
         renderer.clear(&Rect {
@@ -56,6 +61,9 @@ impl Game for RQ {
             w: CANVAS_WIDTH,
             h: CANVAS_HEIGHT,
         });
-        self.player.draw(renderer)
+        if let Some(state_machine) = &self.actor.state_machine {
+            state_machine.draw(renderer)?;
+        }
+        Ok(())
     }
 }
