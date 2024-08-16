@@ -2,7 +2,7 @@ pub mod map_scene;
 
 use crate::{
     engine::{Game, KeyState, Rect, Renderer},
-    object::player::Player,
+    object::player::{Direction, Player},
 };
 use map_scene::MapScene;
 
@@ -22,7 +22,7 @@ impl SceneManager {
     pub fn new() -> Self {
         Self {
             current_scene: SceneEnum::MapScene(MapScene {
-                player: Rc::new(RefCell::new(Player {})),
+                player: Rc::new(RefCell::new(Player {direction: Direction::Down})),
             }),
         }
     }

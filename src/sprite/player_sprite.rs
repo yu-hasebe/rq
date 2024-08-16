@@ -1,8 +1,12 @@
-use crate::{engine::Rect, object::player::Player};
+use std::{borrow::Borrow, cell::Ref, ops::Deref};
+
+use crate::{engine::Rect, object::player::{Direction, Player}};
 
 use super::Sprite;
 
-pub struct PlayerSprite {}
+pub struct PlayerSprite {
+    direction: Direction,
+}
 
 impl Sprite for PlayerSprite {
     fn source_image(&self) -> String {
@@ -26,8 +30,21 @@ impl Sprite for PlayerSprite {
     }
 }
 
-impl From<Player> for PlayerSprite {
-    fn from(from: Player) -> Self {
-        Self {}
+pub struct FooValue<'a> {
+    pub value: Ref<'a, Player>,
+}
+
+impl<'b> Deref for FooValue<'b> {
+    type Target = Player;
+    fn deref(&self) -> &Player {
+        &self.value
+    }
+}
+
+impl From<&Player> for PlayerSprite {
+    fn from(from: &Player) -> PlayerSprite {
+        PlayerSprite {
+            direction: from.direction.clone(),
+        }
     }
 }

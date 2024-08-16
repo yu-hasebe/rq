@@ -1,6 +1,6 @@
 use crate::engine::Renderer;
 use crate::{engine::KeyState, object::player::Player};
-use crate::sprite::player_sprite::PlayerSprite;
+use crate::sprite::player_sprite::{FooValue, PlayerSprite};
 
 use anyhow::Result;
 use std::{cell::RefCell, rc::Rc};
@@ -18,7 +18,9 @@ impl Scene for MapScene {
     }
     fn draw(&self, renderer: &Renderer) -> Result<()> {
         let player = self.player.borrow();
-        let sprite = PlayerSprite{};
+        let foo = FooValue{value: player};
+        let r: &Player = &foo;
+        let sprite: PlayerSprite = r.into();
         renderer.render(sprite)
     }
 }
