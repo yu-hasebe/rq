@@ -1,4 +1,6 @@
-use super::{Point, Rect, SpriteSheet};
+use crate::{browser::new_image, sprite::Sprite};
+
+use super::Rect;
 
 use anyhow::{anyhow, Result};
 use web_sys::CanvasRenderingContext2d;
@@ -12,38 +14,23 @@ impl Renderer {
             .clear_rect(rect.x.into(), rect.y.into(), rect.w.into(), rect.h.into());
     }
 
-    pub fn draw_image(
-        &self,
-        sprite_sheet: &SpriteSheet,
-        frame_name: &str,
-        destination: &Point,
-    ) -> Result<()> {
-        let sheet = sprite_sheet
-            .sheet
-            .as_ref()
-            .ok_or_else(|| anyhow!("error getting SpriteSheet"))?;
-        let cell = sheet
-            .frames
-            .get(frame_name)
-            .ok_or_else(|| anyhow!("invalid frame_name: {}", frame_name))?;
-
-        let image = sprite_sheet
-            .image
-            .as_ref()
-            .ok_or_else(|| anyhow!("error getting HtmlImageElement"))?;
+    pub fn render<S: Sprite>(&self, sprite: S) -> Result<()> {
+        // TODO 画像読み込みを減らそう
+        let image = new_image()?;
+        let src = format!("{}.png", sprite.source_image());
+        image.set_src(&src);
         self.context
             .draw_image_with_html_image_element_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                image,
-                cell.frame.x.into(),
-                cell.frame.y.into(),
-                cell.frame.w.into(),
-                cell.frame.h.into(),
-                destination.x.into(),
-                destination.y.into(),
-                cell.frame.w.into(),
-                cell.frame.h.into(),
+                &image,
+                sprite.frame().x.into(),
+                sprite.frame().y.into(),
+                sprite.frame().w.into(),
+                sprite.frame().h.into(),
+                sprite.destination().x.into(),
+                sprite.destination().y.into(),
+                sprite.destination().w.into(),
+                sprite.destination().h.into(),
             )
-            .map_err(|err| anyhow!("error drawing image: {:#?}", err))?;
-        Ok(())
+            .map_err(|err| anyhow!("error drawing image: {:#?}", err))
     }
 }

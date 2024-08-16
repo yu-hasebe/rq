@@ -1,10 +1,12 @@
 #[macro_use]
 mod browser;
 mod engine;
-mod game;
+mod scene;
+mod sprite;
+mod object;
 
 use crate::engine::GameLoop;
-use crate::game::RQ;
+use crate::scene::SceneManager;
 use wasm_bindgen::prelude::*;
 
 // This is like the `main` function, except for JavaScript.
@@ -13,7 +15,7 @@ pub fn main_js() -> Result<(), JsValue> {
     console_error_panic_hook::set_once();
 
     browser::spawn_local(async move {
-        let game = RQ::new();
+        let game = SceneManager::new();
         GameLoop::start(game)
             .await
             .expect("error starting GameLoop");
