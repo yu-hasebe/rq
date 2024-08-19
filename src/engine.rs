@@ -68,6 +68,7 @@ impl GameLoop {
     }
 }
 
+#[derive(Clone)]
 pub struct Rect {
     pub x: i16,
     pub y: i16,

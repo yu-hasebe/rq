@@ -2,7 +2,7 @@ pub mod map_scene;
 
 use crate::{
     engine::{Game, KeyState, Rect, Renderer},
-    object::player::{Direction, Player},
+    object::player::Player,
 };
 use map_scene::MapScene;
 
@@ -12,8 +12,8 @@ use std::{cell::RefCell, rc::Rc};
 
 const CANVAS_WIDTH: i16 = 480;
 const CANVAS_HEIGHT: i16 = 480;
-const TILE_WIDTH: i16 = 32;
-const TILE_HEIGHT: i16 = 32;
+pub const TILE_WIDTH: i16 = 32;
+pub const TILE_HEIGHT: i16 = 32;
 
 pub struct SceneManager {
     current_scene: SceneEnum,
@@ -22,7 +22,7 @@ impl SceneManager {
     pub fn new() -> Self {
         Self {
             current_scene: SceneEnum::MapScene(MapScene {
-                player: Rc::new(RefCell::new(Player {direction: Direction::Down})),
+                player: Rc::new(RefCell::new(Player::new(0, 0, 0, 4))),
             }),
         }
     }

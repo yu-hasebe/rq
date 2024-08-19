@@ -1,8 +1,10 @@
 use crate::engine::Renderer;
+use crate::sprite::player_sprite::PlayerSprite;
+use crate::sprite::ConverterIntoSprite;
 use crate::{engine::KeyState, object::player::Player};
-use crate::sprite::player_sprite::{FooValue, PlayerSprite};
 
 use anyhow::Result;
+use std::ops::Deref;
 use std::{cell::RefCell, rc::Rc};
 
 use super::Scene;
@@ -14,13 +16,16 @@ pub struct MapScene {
 
 impl Scene for MapScene {
     fn update(&mut self, key_state: &KeyState) -> Result<()> {
+        let mut player = self.player.borrow_mut();
+        player.update(key_state)?;
         Ok(())
     }
     fn draw(&self, renderer: &Renderer) -> Result<()> {
-        let player = self.player.borrow();
-        let foo = FooValue{value: player};
-        let r: &Player = &foo;
-        let sprite: PlayerSprite = r.into();
+        let sprite: PlayerSprite = ConverterIntoSprite {
+            value: self.player.borrow(),
+        }
+        .deref()
+        .into();
         renderer.render(sprite)
     }
 }
